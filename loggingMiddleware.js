@@ -1,20 +1,34 @@
-import fetch from "node-fetch";
-
-export async function Log(stack, level, packageName, message) {
+const _fetch = (function () {
+  if (typeof globalThis.fetch === 'function') return globalThis.fetch;
   try {
-    const logData = { stack, level, package: packageName, message };
+    const nf = require('node-fetch');
+    return nf;
+  } catch (e) {
+    return undefined;
+  }
+})();
 
-    const headers = { "Content-Type": "application/json" };
-    if (process.env.LOGGING_AUTH) headers.Authorization = process.env.LOGGING_AUTH;
+async function Log(stack, level, packageName, message) {
+  try {
+    const logData = {
+      stack,
+      level,
+      package: packageName,
+      message
+    };
 
-    const response = await fetch("http://20.244.56.144/evaluation-service/logs", {
+    if (typeof _fetch !== 'function') {
+      throw new Error("fetch is not available. Install 'node-fetch' or run on Node 18+ where fetch is global.");
+    }
+
+    const response = await _fetch('http://20.244.56.144/evaluation-service/logs', {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(logData)
     });
 
     const result = await response.json();
-    console.log("✅ Log Response:", result);
+    console.log("✅ Response:", result);
 
     return result;
   } catch (err) {
@@ -23,7 +37,11 @@ export async function Log(stack, level, packageName, message) {
   }
 }
 
-export function requestLogger(req, res, next) {
-  Log("backend", "info", "route", `${req.method} ${req.url} accessed`);
-  next();
+module.exports = { Log };
+
+if (require.main === module) {
+  (async () => {
+    await Log('backend', 'error', 'handler', 'received string, expected bool');
+    await Log('backend', 'fatal', 'db', 'Critical database connection failure.');
+  })();
 }
